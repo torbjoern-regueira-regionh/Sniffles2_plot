@@ -84,7 +84,7 @@ class VCFLineSV(object):
             )
             self.TRA = "" if self.SVTYPE != "BND" else ALT
             self.END = self.END if self.SVTYPE != "BND" else self.POS + 1
-            self.SVLEN = int(self.SVLEN) if self.SVTYPE != "BND" else self.SVLEN
+            self.SVLEN = 1 if self.SVTYPE == "BND" else int(self.SVLEN) if self.SVLEN else 0
     
     def _check_phased(self,genotype:str)->bool:
         return genotype[1]=='|'
