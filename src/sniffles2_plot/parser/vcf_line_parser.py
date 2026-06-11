@@ -108,7 +108,10 @@ class VCFLineSV(object):
             if "=" not in each_info:
                 self.BREAKPOIN = each_info
             else:
-                [info_key, info_val] = each_info.split("=")
+                parts = each_info.split("=", 1)
+                if len(parts) != 2:
+                    continue
+                info_key, info_val = parts
                 if info_key in extract_info:
                     self.SVTYPE = info_val if info_key == "SVTYPE" else self.SVTYPE
                     self.SVLEN = info_val if info_key == "SVLEN" else self.SVLEN
@@ -137,16 +140,30 @@ class VCFLineSV(object):
     # extract information from the "FORMAT" field and each sample
     def get_genotype(self, _sample, _format):
         # FORMAT field and genotype extraction
-        extract_genotype = ["GT", "GQ", "DR", "DV"]
+        extract_genotype = ["GT", "GQ", "DR", "DV", "AD"]
         # single individual in the vcf file
         split_format = _format.split(":")
         split_gt = _sample.split(":")
         for gt_format, gt_value in zip(split_format, split_gt):
-            if gt_format in extract_genotype:
-                self.GENOTYPE = gt_value if gt_format == "GT" else self.GENOTYPE
-                self.GQ = int(gt_value) if gt_format == "GQ" else self.GQ
-                self.DR = int(gt_value) if gt_format == "DR" else self.DR
-                self.DV = int(gt_value) if gt_format == "DV" else self.DV
+            if gt_format not in extract_genotype or gt_value in (".", ""):
+                continue
+            try:
+                if gt_format == "GT":
+                    self.GENOTYPE = gt_value
+                elif gt_format == "GQ":
+                    self.GQ = int(gt_value)
+                elif gt_format == "DR":
+                    self.DR = int(gt_value)
+                elif gt_format == "DV":
+                    self.DV = int(gt_value)
+                elif gt_format == "AD":
+                    # AD = ref_depth,alt_depth — only set DR/DV if not already provided
+                    ad_parts = gt_value.split(",")
+                    if len(ad_parts) >= 2 and self.DR == 0 and self.DV == 0:
+                        self.DR = int(ad_parts[0])
+                        self.DV = int(ad_parts[1])
+            except (ValueError, IndexError):
+                pass
 
 
 class VCFSampleGenotype(object):
@@ -296,7 +313,10 @@ class VCFLineSVPopulation(object):
             if "=" not in each_info:
                 self.BREAKPOIN = each_info
             else:
-                [info_key, info_val] = each_info.split("=")
+                parts = each_info.split("=", 1)
+                if len(parts) != 2:
+                    continue
+                info_key, info_val = parts
                 if info_key in extract_info:
                     if info_key == "SVTYPE":
                         self.SVTYPE = info_val
@@ -333,23 +353,36 @@ class VCFLineSVPopulation(object):
         for each_gt in self.SAMPLES:
             sample_gt = VCFSampleGenotype()
             split_gt = each_gt.split(":")
+            ad_value = None
             for gt_format, gt_value in zip(split_format, split_gt):
-                gt_value=gt_value.strip()
-                if gt_value == '.':
+                gt_value = gt_value.strip()
+                if gt_value in (".", ""):
                     continue
-                if gt_format == "GT":
-                    self.samples_GT.append(gt_value)
-                    sample_gt.set_gt(gt_value)
-                elif gt_format == "DR":
-                    self.samples_DR.append(gt_value)
-                    sample_gt.set_dr(gt_value)
-                elif gt_format == "DV":
-                    self.samples_DV.append(gt_value)
-                    sample_gt.set_dv(gt_value)
-                elif gt_format == "ID":
-                    self.samples_SV_ID.append(gt_value)
-                    sample_gt.set_id(gt_value)
-                else:
+                try:
+                    if gt_format == "GT":
+                        self.samples_GT.append(gt_value)
+                        sample_gt.set_gt(gt_value)
+                    elif gt_format == "DR":
+                        self.samples_DR.append(gt_value)
+                        sample_gt.set_dr(gt_value)
+                    elif gt_format == "DV":
+                        self.samples_DV.append(gt_value)
+                        sample_gt.set_dv(gt_value)
+                    elif gt_format == "AD":
+                        ad_value = gt_value
+                    elif gt_format == "ID":
+                        self.samples_SV_ID.append(gt_value)
+                        sample_gt.set_id(gt_value)
+                except (ValueError, IndexError):
+                    pass
+            # Fall back to AD field if DR/DV not populated
+            if sample_gt.dv == 0 and sample_gt.dr == 0 and ad_value is not None:
+                try:
+                    ad_parts = ad_value.split(",")
+                    if len(ad_parts) >= 2:
+                        sample_gt.set_dr(int(ad_parts[0]))
+                        sample_gt.set_dv(int(ad_parts[1]))
+                except (ValueError, IndexError):
                     pass
             # AF
             if sample_gt.dv + sample_gt.dr > 0:

@@ -33,7 +33,8 @@ def entry_point():
         generate_charts(input_file_path, output_directory_path)
     else:
         for file_name in os.scandir(input_file_path):
-            if file_name.name.lower().endswith(".vcf"):
+            lower = file_name.name.lower()
+            if lower.endswith(".vcf") or lower.endswith(".vcf.gz"):
                 directory_path = os.path.join(input_file_path, os.path.splitext(file_name.name)[0])
                 os.makedirs(directory_path, exist_ok=True)
                 generate_charts(file_name, directory_path)
