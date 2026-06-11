@@ -17,5 +17,5 @@ dependencies = [
 ]
 
 [project.scripts]
-sniffles2_plot = "sniffles2_plot.__main__:main"
+sniffles2_plot = "sniffles2_plot.cli:entry_point"
 
