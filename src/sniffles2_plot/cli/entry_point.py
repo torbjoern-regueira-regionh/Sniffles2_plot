@@ -49,8 +49,15 @@ def _parse_arguments():
         help="Max rows to embed as a table on the upset plot (default: 50). "
              "Above this, a genome scatter plot is generated instead.",
     )
+    parser.add_argument(
+        "--gtf",
+        default=None,
+        metavar="FILE",
+        help="GTF or GTF.gz annotation file. When provided, SVs are annotated "
+             "with overlapping genes (or nearest gene for BND/fusions).",
+    )
     args = parser.parse_args()
-    return args.input, args.output, args.compare, args.slop, args.min_callers, args.table_limit
+    return args.input, args.output, args.compare, args.slop, args.min_callers, args.table_limit, args.gtf
 
 
 def _ensure_output_directory_exists(path:str) -> None:
@@ -61,7 +68,7 @@ def _ensure_output_directory_exists(path:str) -> None:
 
 
 def entry_point():
-    input_file_path, output_directory_path, compare_mode, slop, min_callers, table_limit = _parse_arguments()
+    input_file_path, output_directory_path, compare_mode, slop, min_callers, table_limit, gtf = _parse_arguments()
 
     if compare_mode:
         if os.path.isfile(input_file_path):
@@ -69,7 +76,7 @@ def entry_point():
         _ensure_output_directory_exists(output_directory_path)
         generate_caller_comparison_upset(
             input_file_path, output_directory_path,
-            slop=slop, min_callers=min_callers, table_limit=table_limit,
+            slop=slop, min_callers=min_callers, table_limit=table_limit, gtf=gtf,
         )
         return
 

@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import numpy as np
 
+from sniffles2_plot.helper.gtf_annotator import GeneAnnotator
 from sniffles2_plot.helper.io_class import open_vcf
 from sniffles2_plot.parser.vcf_line_parser import VCFLineSV
 
@@ -142,11 +143,19 @@ def _upset_plot(
         ax_tbl = fig.add_subplot(gs[2])
         ax_tbl.axis("off")
         rows = sorted(multicaller_variants, key=lambda v: (_chr_sort_key(v[0]), v[1]))
-        table_data = [
-            [v[0], str(v[1]), v[2], str(v[3]) if v[3] else ".", str(v[4])]
-            for v in rows
-        ]
-        col_labels = ["CHROM", "POS", "SVTYPE", "SVLEN", f"#callers (≥{min_callers})"]
+        has_genes = len(rows[0]) > 5 if rows else False
+        if has_genes:
+            table_data = [
+                [v[0], str(v[1]), v[2], str(v[3]) if v[3] else ".", str(v[4]), v[5]]
+                for v in rows
+            ]
+            col_labels = ["CHROM", "POS", "SVTYPE", "SVLEN", f"#callers (≥{min_callers})", "GENES"]
+        else:
+            table_data = [
+                [v[0], str(v[1]), v[2], str(v[3]) if v[3] else ".", str(v[4])]
+                for v in rows
+            ]
+            col_labels = ["CHROM", "POS", "SVTYPE", "SVLEN", f"#callers (≥{min_callers})"]
         tbl = ax_tbl.table(
             cellText=table_data,
             colLabels=col_labels,
@@ -166,6 +175,25 @@ def _upset_plot(
     print(f"Saved: {out_path}")
 
 
+def _annotate_variants(variants: list, annotator: "GeneAnnotator") -> list:
+    """
+    Return variants extended with a GENES string.
+    Input:  (chrom, pos, svtype, svlen, n_callers)
+    Output: (chrom, pos, svtype, svlen, n_callers, genes_str)
+    """
+    result = []
+    for chrom, pos, svtype, svlen, n in variants:
+        if svtype == "BND":
+            genes = annotator.nearest(chrom, pos)
+            genes_str = genes if genes else "."
+        else:
+            end = pos + abs(svlen) if svlen else pos + 1
+            gene_list = annotator.annotate(chrom, pos, end)
+            genes_str = ",".join(gene_list) if gene_list else "."
+        result.append((chrom, pos, svtype, svlen, n, genes_str))
+    return result
+
+
 def _genome_scatter_plot(
     variants: list,
     caller_names: list,
@@ -174,21 +202,32 @@ def _genome_scatter_plot(
 ):
     """
     Genome-wide scatter of multi-caller variants.
-    variants: list of (chrom, pos, svtype, svlen, n_callers)
+    variants: list of (chrom, pos, svtype, svlen, n_callers[, genes_str])
     """
     chroms = sorted({v[0] for v in variants}, key=_chr_sort_key)
     chrom_index = {c: i for i, c in enumerate(chroms)}
     n_callers = len(caller_names)
+    has_genes = len(variants[0]) > 5
 
     fig, ax = plt.subplots(figsize=(max(10, len(chroms) * 0.6), 6))
 
     for v in variants:
-        chrom, pos, svtype, svlen, n = v
+        chrom, pos, svtype, svlen, n = v[:5]
+        genes_str = v[5] if has_genes else None
         xi = chrom_index[chrom]
         color = _SVTYPE_COLORS.get(svtype, _DEFAULT_COLOR)
-        # Dot size scales with number of callers
         size = 30 + (n / n_callers) * 120
         ax.scatter(xi, pos, c=color, s=size, alpha=0.6, edgecolors="none", zorder=2)
+        # Label with gene name if available and not a dot
+        if genes_str and genes_str != ".":
+            # Show only first gene to avoid clutter
+            label = genes_str.split(",")[0]
+            ax.annotate(
+                label, (xi, pos),
+                fontsize=4, ha="center", va="bottom",
+                xytext=(0, 3), textcoords="offset points",
+                color="black",
+            )
 
     ax.set_xticks(range(len(chroms)))
     ax.set_xticklabels(chroms, rotation=45, ha="right", fontsize=7)
@@ -197,7 +236,6 @@ def _genome_scatter_plot(
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
 
-    # Legend for SVTYPE colours
     seen_types = sorted({v[2] for v in variants})
     handles = [
         plt.Line2D([0], [0], marker="o", color="w",
@@ -205,7 +243,6 @@ def _genome_scatter_plot(
                    markersize=6, label=t)
         for t in seen_types
     ]
-    # Size legend for caller count
     for n in sorted({v[4] for v in variants}):
         s = 30 + (n / n_callers) * 120
         handles.append(
@@ -222,14 +259,20 @@ def _genome_scatter_plot(
     print(f"Saved: {out_path}")
 
 
-def _write_tsv(variants: list, caller_names: list, out_path: str, min_callers: int):
-    """Write multi-caller variants to a TSV file."""
+def _write_tsv(variants: list, out_path: str, min_callers: int):
+    """Write multi-caller variants to a TSV file. Variants may have 5 or 6 fields."""
+    has_genes = len(variants[0]) > 5 if variants else False
     with open(out_path, "w") as f:
-        f.write("CHROM\tPOS\tSVTYPE\tSVLEN\tN_CALLERS\tCALLERS\n")
+        header = "CHROM\tPOS\tSVTYPE\tSVLEN\tN_CALLERS"
+        if has_genes:
+            header += "\tGENES"
+        f.write(header + "\n")
         for v in sorted(variants, key=lambda x: (_chr_sort_key(x[0]), x[1])):
-            chrom, pos, svtype, svlen, n = v
-            # We only have n_callers count here; callers string is added separately
-            f.write(f"{chrom}\t{pos}\t{svtype}\t{svlen if svlen else '.'}\t{n}\t.\n")
+            chrom, pos, svtype, svlen, n = v[:5]
+            row = f"{chrom}\t{pos}\t{svtype}\t{svlen if svlen else '.'}\t{n}"
+            if has_genes:
+                row += f"\t{v[5]}"
+            f.write(row + "\n")
     print(f"Saved: {out_path}")
 
 
@@ -239,6 +282,7 @@ def generate_caller_comparison_upset(
     slop: int = 500,
     min_callers: int = None,
     table_limit: int = 50,
+    gtf: str = None,
 ):
     """
     Read all VCF files in vcf_dir (one per caller).  Cluster SVs by
@@ -249,6 +293,9 @@ def generate_caller_comparison_upset(
       - Always written to a TSV file.
       - Embedded as a table on the upset plot if count <= table_limit.
       - Shown as a genome scatter plot if count > table_limit.
+
+    If gtf is provided, overlapping genes are added to TSV, scatter plot
+    labels, and the embedded table.
     """
     vcf_files = sorted(
         e.path
@@ -292,8 +339,10 @@ def generate_caller_comparison_upset(
 
     os.makedirs(output_dir, exist_ok=True)
 
+    annotator = GeneAnnotator(gtf) if gtf else None
+
     def _multicaller_variants_for(keys):
-        """Return list of (chrom, pos, svtype, svlen, n_callers) for keys with >= min_callers."""
+        """Return variants with >= min_callers, optionally annotated with genes."""
         if min_callers is None:
             return None
         result = []
@@ -302,7 +351,11 @@ def generate_caller_comparison_upset(
             if n >= min_callers:
                 chrom, pos, svtype, svlen = all_repr.get(k, (k[1], k[2] * slop, k[0], 0))
                 result.append((chrom, pos, svtype, svlen, n))
-        return result or None
+        if not result:
+            return None
+        if annotator:
+            result = _annotate_variants(result, annotator)
+        return result
 
     def _run_for(keys, svtype_label, file_prefix):
         counts = collections.Counter(key_to_callers[k] for k in keys)
@@ -319,13 +372,11 @@ def generate_caller_comparison_upset(
         )
 
         if mc_variants:
-            # Always write TSV
             _write_tsv(
-                mc_variants, caller_names,
+                mc_variants,
                 os.path.join(output_dir, f"{file_prefix}_multicaller.tsv"),
                 min_callers,
             )
-            # Genome scatter if too many to fit in table
             if len(mc_variants) > table_limit:
                 _genome_scatter_plot(
                     mc_variants,
