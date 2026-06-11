@@ -30,8 +30,27 @@ def _parse_arguments():
         default=500,
         help="Window size in bp for matching SVs across callers (default: 500)",
     )
+    parser.add_argument(
+        "--min-callers",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "In --compare mode: report variants found by >= N callers. "
+            "Writes a TSV, embeds a table on the plot (if <= --table-limit rows), "
+            "or generates a genome scatter plot (if more rows)."
+        ),
+    )
+    parser.add_argument(
+        "--table-limit",
+        type=int,
+        default=50,
+        metavar="N",
+        help="Max rows to embed as a table on the upset plot (default: 50). "
+             "Above this, a genome scatter plot is generated instead.",
+    )
     args = parser.parse_args()
-    return args.input, args.output, args.compare, args.slop
+    return args.input, args.output, args.compare, args.slop, args.min_callers, args.table_limit
 
 
 def _ensure_output_directory_exists(path:str) -> None:
@@ -42,13 +61,16 @@ def _ensure_output_directory_exists(path:str) -> None:
 
 
 def entry_point():
-    input_file_path, output_directory_path, compare_mode, slop = _parse_arguments()
+    input_file_path, output_directory_path, compare_mode, slop, min_callers, table_limit = _parse_arguments()
 
     if compare_mode:
         if os.path.isfile(input_file_path):
             raise ValueError("--compare requires a directory of VCF files, not a single file.")
         _ensure_output_directory_exists(output_directory_path)
-        generate_caller_comparison_upset(input_file_path, output_directory_path, slop=slop)
+        generate_caller_comparison_upset(
+            input_file_path, output_directory_path,
+            slop=slop, min_callers=min_callers, table_limit=table_limit,
+        )
         return
 
     if os.path.isfile(input_file_path):
