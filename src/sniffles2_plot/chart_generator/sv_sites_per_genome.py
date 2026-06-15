@@ -28,7 +28,7 @@ class Sv_sites_per_genome(FileIO):
         self.bnd_list = []
         self.cnv_list = []
         self.other_list = []
-        with open(self.input_file_path, "r", encoding="utf-8") as f:
+        with self.open_input() as f:
             for line in f:
                 if line.startswith("##"):
                     continue
@@ -38,7 +38,7 @@ class Sv_sites_per_genome(FileIO):
                     obj = VCFLineSVPopulation(line)
                     if obj.ERROR:
                         continue
-                    if obj.FILTER == "PASS":
+                    if obj.FILTER in ("PASS", "."):
                         if obj.SVTYPE == "DEL":
                             integer_list = [int(x) for x in obj.SUPP_VEC]
                             self.del_list.append(list(integer_list))

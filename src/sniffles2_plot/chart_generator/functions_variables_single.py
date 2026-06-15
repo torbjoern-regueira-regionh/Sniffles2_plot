@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from math import ceil
 
+from sniffles2_plot.helper.io_class import open_vcf
 from sniffles2_plot.parser.vcf_line_parser import VCFLineSV
 from sniffles2_plot.schemas import *
 
@@ -147,7 +148,7 @@ def length_var_count_chart(
 
 def vcf_number_variants(input_vcf_file):
     """return the number of each variant seprately"""
-    with open(input_vcf_file, "r") as f:
+    with open_vcf(input_vcf_file) as f:
         lines = f.readlines()
         vcf_variables = VcfVariables.new()
         for line in lines:

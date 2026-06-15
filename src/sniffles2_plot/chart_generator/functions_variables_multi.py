@@ -63,7 +63,7 @@ class GenomeChartDataGenerator(FileIO):
     def allele_frequency_chart_generator(self):
         """generate the allele frequency plots"""
         sample_names = []
-        with open(self.input_file_path, "r", encoding="utf-8") as f:
+        with self.open_input() as f:
             for line in f:
                 if line.startswith("#C"):
                  #   sample_names = [l.strip() + str(index+1) for index, l in enumerate(line.split("\t")[9:])]
@@ -76,7 +76,7 @@ class GenomeChartDataGenerator(FileIO):
         INV_LIST = []
         DUP_LIST = []
 
-        with open(self.input_file_path, "r", encoding="utf-8") as f:
+        with self.open_input() as f:
             for line in f:
                 if line.startswith("#"):
                     continue
@@ -128,7 +128,7 @@ class GenomeChartDataGenerator(FileIO):
         """generate the upset plots for SVs per each sample"""
         sample_names = []
         samples_intersections=[]
-        with open(self.input_file_path, "r", encoding="utf-8") as f:
+        with self.open_input() as f:
             for line in f:
                 if line.startswith("##"):
                     continue
@@ -138,7 +138,7 @@ class GenomeChartDataGenerator(FileIO):
                     obj = VCFLineSVPopulation(line)
                     if obj.ERROR:
                         continue
-                    if obj.FILTER == "PASS":
+                    if obj.FILTER in ("PASS", "."):
                         samples_intersections.append(obj.SUPP_VEC)
         if not sample_names:
             sample_names = ["sample_1"]
@@ -198,7 +198,7 @@ class GenomeChartDataGenerator(FileIO):
         sample_names = []
         samples_del = []
         samples_ins = []
-        with open(self.input_file_path, "r", encoding="utf-8") as f:
+        with self.open_input() as f:
             for line in f:
                 if line.startswith("##"):
                     continue
@@ -209,9 +209,9 @@ class GenomeChartDataGenerator(FileIO):
                     obj = VCFLineSVPopulation(line)
                     if obj.ERROR:
                         continue
-                    if obj.FILTER == "PASS" and obj.SVTYPE == "DEL":
+                    if obj.FILTER in ("PASS", ".") and obj.SVTYPE == "DEL":
                         samples_del.append(obj.SUPP_VEC)
-                    elif obj.FILTER == "PASS" and obj.SVTYPE == "INS":
+                    elif obj.FILTER in ("PASS", ".") and obj.SVTYPE == "INS":
                         samples_ins.append(obj.SUPP_VEC)
         # counter = sum(1 for i in samples_ins if i[0] == "1" and i[-1] == "1")
         # print(counter)

@@ -47,7 +47,7 @@ class SizeDistribution(FileIO):
     def variants_couns(self):
         """return the number of each variant seprately"""
         global SAMPLES
-        with open(self.input_file_path, "r") as f:
+        with self.open_input() as f:
             lines = f.readlines()
             vcf_variables = VcfVariables.new()
             for line in lines:
@@ -73,7 +73,7 @@ class SizeDistribution(FileIO):
 
     def generate_size_distribution_plot(self):
         tmp = self.variants_couns()
-        all_size = result = [int(x / 6) for x in tmp.all_size]
+        all_size = [abs(int(x)) for x in tmp.all_size]
         counts, bins = np.histogram(all_size, bins=np.logspace(0, 6, 50))
         bin_centers = (bins[:-1] + bins[1:]) / 2
         counts = list_percentage(counts)

@@ -26,7 +26,7 @@ class VariantCount(FileIO):
         self.cnv_count = 0
         self.other_count = 0
         test_sv = []
-        with open(self.input_file_path, "r", encoding="utf-8") as f:
+        with self.open_input() as f:
             for line in f:
                 if line.startswith("#"):
                     continue

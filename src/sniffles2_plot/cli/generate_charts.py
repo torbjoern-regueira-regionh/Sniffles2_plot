@@ -5,16 +5,17 @@ Created on Mon May 15 10:17:54 2023
 @author: HGSC - Farhang Jaryani
 """
 from sniffles2_plot.cli import generate_multi_vcf_charts, single_visulaizer
+from sniffles2_plot.helper.io_class import open_vcf
 
 HEADER_SIGN = "#"
 
 
 def _is_multi_vcf(input_vcf_file_path: str) -> bool:
-    with open(input_vcf_file_path, "r") as f:
+    """Return True if the VCF has more than one sample column."""
+    with open_vcf(input_vcf_file_path) as f:
         for line in f:
-            if not line.startswith(HEADER_SIGN):
-                if line.count("\t") > 9:
-                    return True
+            if line.startswith("#CHROM") or line.startswith("#chrom"):
+                return len(line.split("\t")) > 10  # 9 fixed cols + >1 sample
     return False
 
 
